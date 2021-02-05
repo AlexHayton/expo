@@ -1,10 +1,24 @@
-export type AutolinkingPlatform = 'ios' | 'android';
+export type SupportedPlatform = 'ios' | 'android';
 
-export type SearchOptions = {
+export interface SearchOptions {
+  // Available in the CLI
   searchPaths: string[];
   ignorePaths?: string[] | null;
   exclude?: string[] | null;
-};
+  platform: SupportedPlatform;
+
+  // Scratched from project's config
+  flags?: Record<string, any>;
+}
+
+export interface ResolveOptions extends SearchOptions {
+  json?: boolean;
+}
+
+export interface GenerateOptions extends ResolveOptions {
+  target: string;
+  namespace: string;
+}
 
 export type PackageRevision = {
   path: string;

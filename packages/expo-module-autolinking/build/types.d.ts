@@ -1,9 +1,18 @@
-export declare type AutolinkingPlatform = 'ios' | 'android';
-export declare type SearchOptions = {
+export declare type SupportedPlatform = 'ios' | 'android';
+export interface SearchOptions {
     searchPaths: string[];
     ignorePaths?: string[] | null;
     exclude?: string[] | null;
-};
+    platform: SupportedPlatform;
+    flags?: Record<string, any>;
+}
+export interface ResolveOptions extends SearchOptions {
+    json?: boolean;
+}
+export interface GenerateOptions extends ResolveOptions {
+    target: string;
+    namespace: string;
+}
 export declare type PackageRevision = {
     path: string;
     version: string;

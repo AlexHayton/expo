@@ -22,18 +22,13 @@ project(":expo-random").projectDir = new File("../packages/expo-random/android")
 })
 // WHEN_DISTRIBUTING_REMOVE_TO_HERE
 
-// Import gradle helpers for unimodules.
-apply from: '../node_modules/react-native-unimodules/gradle.groovy'
-
-// Include unimodules.
-includeUnimodulesProjects(
-// WHEN_DISTRIBUTING_REMOVE_FROM_HERE
-    [
-        modulesPaths: ['../../packages'],
-        target      : 'react-native',
-        exclude     : [
-            'expo-module-template',
-        ]
-    ]
-// WHEN_DISTRIBUTING_REMOVE_TO_HERE
-)
+// Import gradle helpers and use expo modules.
+// The adapter needs to be included manually, as we don't use RN's autolinking in Expo Go.
+apply from: '../packages/@unimodules/react-native-adapter/scripts/autolinking.gradle'
+include ':unimodules-react-native-adapter'
+project(':unimodules-react-native-adapter').projectDir = new File(rootDir, '../packages/@unimodules/react-native-adapter/android')
+useExpoModules([
+  exclude: [
+    'expo-module-template'
+  ]
+])

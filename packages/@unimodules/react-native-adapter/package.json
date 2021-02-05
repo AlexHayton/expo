@@ -14,6 +14,9 @@
     "prepublishOnly": "expo-module prepublishOnly",
     "expo-module": "expo-module"
   },
+  "bin": {
+    "expo-autolinking": "bin/expo-autolinking.js"
+  },
   "keywords": [
     "react-native",
     "unimodules",
@@ -34,6 +37,10 @@
     "preset": "expo-module-scripts"
   },
   "dependencies": {
+    "chalk": "^4.1.0",
+    "commander": "^7.2.0",
+    "find-up": "^5.0.0",
+    "fs-extra": "^9.1.0",
     "invariant": "^2.2.4"
   },
   "devDependencies": {

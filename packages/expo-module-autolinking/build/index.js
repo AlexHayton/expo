@@ -3,137 +3,63 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveModulesAsync = exports.verifySearchResults = exports.mergeLinkingOptionsAsync = exports.findModulesAsync = exports.findDefaultPathsAsync = exports.findPackageJsonPathAsync = exports.resolveSearchPathsAsync = void 0;
-const chalk_1 = __importDefault(require("chalk"));
-const fast_glob_1 = __importDefault(require("fast-glob"));
-const find_up_1 = __importDefault(require("find-up"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-const logger_1 = require("./logger");
+const commander_1 = __importDefault(require("commander"));
+const autolinking_1 = require("./autolinking");
 /**
- * Resolves autolinking search paths. If none is provided, it accumulates all node_modules when
- * going up through the path components. This makes workspaces work out-of-the-box without any configs.
+ * Registers a command that only searches for available expo modules.
  */
-async function resolveSearchPathsAsync(searchPaths, cwd) {
-    return searchPaths && searchPaths.length > 0
-        ? searchPaths.map(searchPath => path_1.default.resolve(cwd, searchPath))
-        : await findDefaultPathsAsync(cwd);
-}
-exports.resolveSearchPathsAsync = resolveSearchPathsAsync;
-/**
- * Finds project's package.json and returns its path.
- */
-async function findPackageJsonPathAsync() {
-    return (await find_up_1.default('package.json', { cwd: process.cwd() })) ?? null;
-}
-exports.findPackageJsonPathAsync = findPackageJsonPathAsync;
-/**
- * Looks up for workspace's `node_modules` paths.
- */
-async function findDefaultPathsAsync(cwd) {
-    const paths = [];
-    let dir = cwd;
-    let pkgJsonPath;
-    while ((pkgJsonPath = await find_up_1.default('package.json', { cwd: dir }))) {
-        dir = path_1.default.dirname(path_1.default.dirname(pkgJsonPath));
-        paths.push(path_1.default.join(pkgJsonPath, '..', 'node_modules'));
-    }
-    return paths;
-}
-exports.findDefaultPathsAsync = findDefaultPathsAsync;
-/**
- * Searches for modules to link based on given config.
- */
-async function findModulesAsync(platform, providedOptions) {
-    const config = await mergeLinkingOptionsAsync(platform, providedOptions);
-    const results = {};
-    for (const searchPath of config.searchPaths) {
-        const paths = await fast_glob_1.default('**/unimodule.json', {
-            cwd: searchPath,
+function registerSearchCommand(commandName, fn) {
+    return commander_1.default
+        .command(`${commandName} [paths...]`)
+        .option('-i, --ignore-paths <ignorePaths...>', 'Paths to ignore when looking up for modules.', (value, previous) => (previous ?? []).concat(value))
+        .option('-e, --exclude <exclude...>', 'Package names to exclude when looking up for modules.', (value, previous) => (previous ?? []).concat(value))
+        .action(async (searchPaths, providedOptions) => {
+        const options = await autolinking_1.mergeLinkingOptionsAsync({
+            ...providedOptions,
+            searchPaths,
         });
-        for (const packageConfigPath of paths) {
-            const packagePath = fs_1.default.realpathSync(path_1.default.join(searchPath, path_1.default.dirname(packageConfigPath)));
-            const packageConfig = require(path_1.default.join(packagePath, 'unimodule.json'));
-            const { name, version } = require(path_1.default.join(packagePath, 'package.json'));
-            if (config.exclude?.includes(name) || !packageConfig.platforms?.includes(platform)) {
-                continue;
-            }
-            const currentRevision = {
-                path: packagePath,
-                version,
-            };
-            if (!results[name]) {
-                // The revision that was found first will be the main one.
-                // An array of duplicates is needed only here.
-                results[name] = { ...currentRevision, duplicates: [] };
-            }
-            else if (results[name].path !== packagePath &&
-                results[name].duplicates?.every(({ path }) => path !== packagePath)) {
-                results[name].duplicates?.push(currentRevision);
-            }
-        }
-    }
-    return results;
+        const searchResults = await autolinking_1.findModulesAsync(options);
+        return await fn(searchResults, options);
+    });
 }
-exports.findModulesAsync = findModulesAsync;
 /**
- * Merges autolinking options from different sources (the later the higher priority)
- * - options defined in package.json's `expoModules` field
- * - platform-specific options from the above (e.g. `expoModules.ios`)
- * - options provided to the CLI command
+ * Registers a command that searches for modules and then resolves them for specific platform.
  */
-async function mergeLinkingOptionsAsync(platform, providedOptions) {
-    const packageJsonPath = await findPackageJsonPathAsync();
-    const packageJson = packageJsonPath ? require(packageJsonPath) : {};
-    const baseOptions = packageJson.expo?.autolinking;
-    const platformOptions = baseOptions?.[platform];
-    const allOptions = [providedOptions, platformOptions, baseOptions];
-    function pickMergedValue(key) {
-        for (const obj of allOptions) {
-            if (obj?.[key]) {
-                return obj[key];
-            }
+function registerResolveCommand(commandName, fn) {
+    return registerSearchCommand(commandName, fn).option('-p, --platform [platform]', 'The platform that the resulted modules must support. Available options: "ios", "android"', 'ios');
+}
+module.exports = async function (args) {
+    // Searches for available expo modules.
+    registerSearchCommand('search', async (results) => {
+        console.log(require('util').inspect(results, false, null, true));
+    });
+    // Checks whether there are no resolving issues in the current setup.
+    registerSearchCommand('verify', results => {
+        const numberOfDuplicates = autolinking_1.verifySearchResults(results);
+        if (!numberOfDuplicates) {
+            console.log('✅ Everything is fine!');
         }
-        return null;
-    }
-    return {
-        searchPaths: await resolveSearchPathsAsync(pickMergedValue('searchPaths'), process.cwd()),
-        ignorePaths: pickMergedValue('ignorePaths'),
-        exclude: pickMergedValue('exclude'),
-    };
-}
-exports.mergeLinkingOptionsAsync = mergeLinkingOptionsAsync;
-/**
- * Verifies the search results by checking whether there are no duplicates.
- * A custom logger (e.g. non-TTY) can be provided.
- */
-function verifySearchResults(searchResults, logger = new logger_1.ConsoleLogger()) {
-    const cwd = process.cwd();
-    const relativePath = pkg => path_1.default.relative(cwd, pkg.path);
-    let counter = 0;
-    for (const moduleName in searchResults) {
-        const revision = searchResults[moduleName];
-        if (revision.duplicates?.length) {
-            logger.warn(`⚠️  Found multiple revisions of ${chalk_1.default.green(moduleName)}`);
-            logger.log(` - ${chalk_1.default.magenta(relativePath(revision))} (${chalk_1.default.cyan(revision.version)})`);
-            for (const duplicate of revision.duplicates) {
-                logger.log(` - ${chalk_1.default.gray(relativePath(duplicate))} (${chalk_1.default.gray(duplicate.version)})`);
-            }
-            counter++;
+    });
+    // Searches for available expo modules and resolves the results for given platform.
+    registerResolveCommand('resolve', async (results, options) => {
+        const modules = await autolinking_1.resolveModulesAsync(results, options);
+        if (options.json) {
+            console.log(JSON.stringify({ modules }));
         }
-    }
-    if (counter > 0) {
-        logger.warn('⚠️  Please get rid of multiple revisions as it may introduce some side effects or compatibility issues');
-    }
-    return counter;
-}
-exports.verifySearchResults = verifySearchResults;
-/**
- * Resolves search results to a list of platform-specific configuration.
- */
-async function resolveModulesAsync(platform, searchResults) {
-    const platformLinking = require(`./resolvers/${platform}`);
-    return (await Promise.all(Object.entries(searchResults).map(([packageName, revision]) => platformLinking.resolveModuleAsync(packageName, revision)))).filter(Boolean);
-}
-exports.resolveModulesAsync = resolveModulesAsync;
+        else {
+            console.log({ modules });
+        }
+    }).option('-j, --json', 'Output results in the plain JSON format.', () => true, false);
+    // Generates a source file listing all packages to link.
+    registerResolveCommand('generate-package-list', async (results, options) => {
+        const modules = await autolinking_1.resolveModulesAsync(results, options);
+        autolinking_1.generatePackageListAsync(modules, options);
+    })
+        .option('-t, --target <path>', 'Path to the target file, where the package list should be written to.')
+        .option('-n, --namespace <namespace>', 'Java package name under which the package list should be placed.');
+    await commander_1.default
+        .version(require('expo-module-autolinking/package.json').version)
+        .description('CLI command that searches for Expo modules to autolink them.')
+        .parseAsync(args, { from: 'user' });
+};
 //# sourceMappingURL=index.js.map

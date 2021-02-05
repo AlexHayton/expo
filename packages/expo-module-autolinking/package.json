@@ -34,14 +34,13 @@
   "license": "MIT",
   "homepage": "https://github.com/expo/expo/tree/master/packages/expo-module-autolinking#readme",
   "devDependencies": {
-    "@types/semver": "^7.3.4",
     "expo-module-scripts": "~2.0.0"
   },
   "dependencies": {
     "chalk": "^4.1.0",
-    "cli-table3": "^0.6.0",
-    "commander": "^6.2.1",
+    "commander": "^7.2.0",
+    "fast-glob": "^3.2.5",
     "find-up": "^5.0.0",
-    "semver": "^7.3.4"
+    "fs-extra": "^9.1.0"
   }
 }

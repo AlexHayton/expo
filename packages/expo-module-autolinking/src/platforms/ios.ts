@@ -1,14 +1,15 @@
 import glob from 'fast-glob';
 import path from 'path';
 
-import { ModuleDescriptor, PackageRevision } from '../types';
+import { ModuleDescriptor, PackageRevision, SearchOptions } from '../types';
 
 /**
  * Resolves module search result with additional details required for iOS platform.
  */
 export async function resolveModuleAsync(
   packageName: string,
-  revision: PackageRevision
+  revision: PackageRevision,
+  options: SearchOptions
 ): Promise<ModuleDescriptor | null> {
   const [podspecFile] = await glob('*/*.podspec', {
     cwd: revision.path,
@@ -25,5 +26,6 @@ export async function resolveModuleAsync(
   return {
     podName,
     podspecDir,
+    flags: options.flags,
   };
 }
